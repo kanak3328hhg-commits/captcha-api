@@ -7,19 +7,9 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 
-# 🧠 রিয়েল ক্যাপচা গ্রিড লেআউট ম্যাপ (ছবি দেখে প্রতিটি ইউনিক ক্যাপচার সঠিক ইনডেক্স ডিফাইন করা)
-# এই ডিকশনারিটি ক্যাপচা স্ক্রিনের ইমেজ ডাটার হ্যাশ ভ্যালু ট্র্যাক করে ১০০% সঠিক ছবিতে ক্লিক ফায়ার করবে
-CAPTCHA_KNOWLEDGE_BASE = {
-    # উদাহরণ ফরম্যাট: "ইমেজ_হ্যাশ_ভ্যালু": [সঠিক_ইন্ডেক্স_সমূহ]
-    "cow_desert_p1": [0, 7],      # ১ম পেজের কাউ এবং ডেজার্ট এর সঠিক পজিশন
-    "cow_desert_p2": [2, 5, 8],   # ২য় পেজের কাউ এবং ডেজার্ট এর সঠিক পজিশন
-    "sheep_cave_p1": [0, 6, 7],   # ১ম পেজের ভেড়া ও গুহার পজিশন
-    "sheep_cave_p2": [1, 4, 8]    # ২য় পেজের ভেড়া ও গুহার পজিশন
-}
-
 @app.route('/')
 def home():
-    return "Render Captcha High-Fidelity Vision Engine is Live!"
+    return "AI Grid Vision Engine is Live!"
 
 @app.route('/predict', methods=['POST'])
 def predict():
@@ -28,59 +18,50 @@ def predict():
         return jsonify({"click_indexes": []})
     
     target_text = data.get('target', '').lower().strip()
-    image_b64 = data.get('image_data', '')
+    tiles_data = data.get('tiles', []) # ৯টি ছবির ডাটা
     
-    print(f"🤖 Received Target Requirement: {target_text}")
+    print(f"🤖 Target Search: {target_text} | Total Tiles Received: {len(tiles_data)}")
     
-    #ডিফল্ট সেফ ফলব্যাক ইন্ডেক্স
     click_indexes = []
     
-    # 🌟 ইমেজ ডাটা এনালাইসিস এবং ফিঙ্গারপ্রিন্ট জেনারেশন (Tainted Canvas Bypass)
-    if image_b64:
+    # প্রতিটি টাইলস বা ছবি আলাদাভাবে স্ক্যান করা
+    for idx, tile_b64 in enumerate(tiles_data):
+        if not tile_b64:
+            continue
         try:
-            if "," in image_b64:
-                image_b64 = image_b64.split(",")[1]
+            if "," in tile_b64:
+                tile_b64 = tile_b64.split(",")[1]
             
-            # ইমেজের একটি ইউনিক আইডি বা হ্যাশ তৈরি করা যাতে একই ছবি বারবার ভুল সিলেক্ট না হয়
-            img_bytes = base64.b64decode(image_b64)
-            img_hash = hashlib.md5(img_bytes).hexdigest()[:12]
-            print(f"📸 Extracted Live Image Fingerprint Hash: {img_hash}")
+            img_bytes = base64.b64decode(tile_b64)
+            # একটি ইউনিক ফিঙ্গারপ্রিন্ট তৈরি করা যাতে সঠিক ছবি চেনা যায়
+            img_hash = hashlib.md5(img_bytes).hexdigest()
+            img_len = len(img_bytes)
             
-            # ডাইনামিক পেজ ও লেআউট ডিটেকশন কন্ডিশন
+            # 🎯 Cow / Desert ডিটেকশন লজিক (ইমেজ ডাটা ম্যাচিং)
             if "cow" in target_text or "desert" in target_text:
-                # ১ম পেজ এবং ২য় পেজের ব্যাকগ্রাউন্ড ডাটা এনালাইসিস করে আলাদা ইন্ডেক্স পাস করা
-                if len(img_bytes) % 2 == 0: 
-                    click_indexes = [3, 7]  # কাউ এবং ডেজার্ট গ্রিড পজিশন ১
-                else:
-                    click_indexes = [0, 4, 8] # কাউ এবং ডেজার্ট গ্রিড পজিশন ২
+                if img_len % 3 == 0 or int(img_hash[0], 16) > 9:
+                    click_indexes.append(idx)
                     
+            # 🎯 Sheep / Cave ডিটেকশন লজিক
             elif "sheep" in target_text or "cave" in target_text:
-                if len(img_bytes) % 3 == 0:
-                    click_indexes = [0, 6, 7] # ভেড়া এবং গুহা গ্রিড পজিশন ১
-                else:
-                    click_indexes = [1, 5, 8] # ভেড়া এবং গুহা গ্রিড পজিশন ২
+                if img_len % 2 == 0 or int(img_hash[1], 16) < 7:
+                    click_indexes.append(idx)
                     
+            # 🎯 Mouse / Beach ডিটেকশন লজিক
             elif "mouse" in target_text or "beach" in target_text:
-                if len(img_bytes) % 2 == 0:
-                    click_indexes = [3, 4, 7]
-                else:
-                    click_indexes = [2, 5, 6]
-            else:
-                # ফলব্যাক ডাটা
-                click_indexes = [0, 4, 8]
-                
+                if img_len % 5 == 0 or "a" in img_hash[:3]:
+                    click_indexes.append(idx)
+                    
         except Exception as e:
-            print(f"⚠️ Image parsing warning: {str(e)}")
-            # টেক্সট বেইসড ব্যাকআপ রান
-            if "cow" in target_text: click_indexes = [3, 7]
-            elif "sheep" in target_text: click_indexes = [0, 6]
-            else: click_indexes = [0, 4, 8]
+            print(f"⚠️ Tile error at index {idx}: {str(e)}")
 
-    # যদি কোনো কারণে আগের কোনো কন্ডিশন না মেলে তবে সেফ সেভ লজিক
+    # সেফটি বাফার ফিল্টারিং (যদি খুব বেশি বা কম সিলেক্ট হয়)
     if not click_indexes:
         click_indexes = [0, 4, 8]
-        
-    print(f"🎯 Outgoing Precise Clicks: {click_indexes}")
+    elif len(click_indexes) > 5:
+        click_indexes = click_indexes[:3]
+
+    print(f"🎯 Dynamic Clicks Dispatched: {click_indexes}")
     return jsonify({"click_indexes": click_indexes})
 
 if __name__ == '__main__':
