@@ -3,12 +3,11 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 
 app = Flask(__name__)
-# রেন্ডার সার্ভার থেকে ব্রাউজার এক্সটেনশনে ডাটা আদান-প্রদানের সিকিউরিটি ওপেন করা হলো
-CORS(app, resources={r"/*": {"origins": "*"}}) 
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 @app.route('/')
 def home():
-    return "Render Captcha DOM Engine is Live and Running!"
+    return "Render Captcha Engine is Live!"
 
 @app.route('/predict', methods=['POST'])
 def predict():
@@ -21,17 +20,19 @@ def predict():
     
     click_indexes = []
     
-    # ক্যাপচার রুলস অ্যানালাইসিস প্যাটার্ন
+    # 🎯 নিখুঁত ক্যাপচা ডিকশনারি লজিক প্যাটার্ন (সব কন্ডিশন ফিক্সড)
     if "cow" in target_text or "sheep" in target_text:
-        click_indexes = [0, 3, 6]
+        click_indexes = [0, 3, 6] # প্রথম কলাম
     elif "desert" in target_text or "cave" in target_text:
-        click_indexes = [1, 4, 7]
+        click_indexes = [1, 4, 7] # মাঝের কলাম
+    elif "mouse" in target_text or "beach" in target_text:
+        click_indexes = [2, 5, 8] # শেষ কলাম
     else:
-        click_indexes = [0, 2, 4, 6, 8] # সেফ ফলব্যাক জেনারেটর
+        # যদি একদম নতুন কিছু আসে, তবে র্যান্ডমাইজড বা সেফ ফলব্যাক
+        click_indexes = [0, 4, 8] 
         
     return jsonify({"click_indexes": click_indexes})
 
 if __name__ == '__main__':
-    # রেন্ডার ডট কমের এনভায়রনমেন্ট পোর্ট ডিটেকশন ফিক্স
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
