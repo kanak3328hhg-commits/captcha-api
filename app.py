@@ -7,7 +7,7 @@ app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 
 API_URL = "https://api-inference.huggingface.co/models/Qwen/Qwen2-VL-7B-Instruct"
-HF_API_TOKEN = os.environ.get("HF_API_TOKEN") or "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"
+HF_API_TOKEN = os.environ.get("HF_API_TOKEN")
 headers = {"Authorization": f"Bearer {HF_API_TOKEN}"}
 
 @app.route('/')
