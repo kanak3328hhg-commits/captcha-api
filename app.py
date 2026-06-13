@@ -1,19 +1,22 @@
 import os
-import requests
+import base64
 import numpy as np
 import cv2
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
 app = Flask(__name__)
-# এক্সটেনশনের সিকিউরিটি ও CSP দেয়াল ভাঙার জন্য CORS পুরোপুরি ওপেন করা হলো
-CORS(app, resources={r"/*": {"origins": "*"}}) 
+CORS(app, resources={r"/*": {"origins": "*"}})
 
-def process_captcha(image_url, target_text):
+def process_captcha_base64(base64_string, target_text):
     try:
-        response = requests.get(image_url, timeout=10)
-        img_array = np.asarray(bytearray(response.content), dtype=np.uint8)
-        img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+        # base64 ডাটা থেকে সরাসরি ইমেজ ডিকোড করা (ডাউনলোড করার কোনো ঝামেলা নেই)
+        if "," in base64_string:
+            base64_string = base64_string.split(",")[1]
+            
+        img_data = base64.b64decode(base64_string)
+        nparr = np.frombuffer(img_data, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         
         if img is None:
             return []
@@ -24,7 +27,7 @@ def process_captcha(image_url, target_text):
         click_indexes = []
         index = 0
         
-        # 🌟 টেস্ট করার জন্য ২/৩টি বক্সে ডেমো ক্লিক জেনারেট করা হচ্ছে
+        # ডেমো ক্লিক জেনারেটর (টেস্টিং লজিক)
         for r in range(rows):
             for c in range(cols):
                 if (r + c) % 2 == 0: 
@@ -33,28 +36,25 @@ def process_captcha(image_url, target_text):
                 
         return click_indexes
     except Exception as e:
-        print("Error during processing:", e)
+        print("Error during image processing:", e)
         return []
 
 @app.route('/')
 def home():
-    return "AI Captcha Backend is Running Successfully!"
+    return "New Screen-Capture AI Backend is Running Successfully!"
 
-# পোস্ট মেথড রাউট
 @app.route('/predict', methods=['POST'])
 def predict():
     data = request.get_json()
-    if not data or 'image_url' not in data:
-        return jsonify({"error": "Missing image_url"}), 400
+    if not data or 'image_data' not in data:
+        return jsonify({"error": "Missing image_data"}), 400
     
-    image_url = data['image_url']
+    # নতুন সিস্টেম: লিংকের বদলে বেস৬৪ ইমেজ ডাটা গ্রহণ
+    base64_image = data['image_data']
     target = data.get('target', '').lower()
     
-    tiles_to_click = process_captcha(image_url, target)
-    
-    # রেসপন্স হেডারে এক্সপ্রেশন ক্লিয়ার রাখা
+    tiles_to_click = process_captcha_base64(base64_image, target)
     return jsonify({"click_indexes": tiles_to_click})
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port, debug=False)
+    app.run(host='127.0.0.1', port=5000, debug=True)
