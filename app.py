@@ -3,12 +3,12 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 
 app = Flask(__name__)
-# সব ধরণের এক্সটেনশন পলিসি বাইপাস করার জন্য CORS ওপেন
+# রেন্ডার সার্ভার থেকে ব্রাউজার এক্সটেনশনে ডাটা আদান-প্রদানের সিকিউরিটি ওপেন করা হলো
 CORS(app, resources={r"/*": {"origins": "*"}}) 
 
 @app.route('/')
 def home():
-    return "DOM-Pattern AI Engine is Active!"
+    return "Render Captcha DOM Engine is Live and Running!"
 
 @app.route('/predict', methods=['POST'])
 def predict():
@@ -17,20 +17,21 @@ def predict():
         return jsonify({"click_indexes": []})
     
     target_text = data.get('target', '').lower()
-    print(f"🤖 [AI Engine] Analyzing target text rule: '{target_text}'")
+    print(f"🤖 Received Target Requirement: {target_text}")
     
-    # 🌟 টেক্সট প্যাটার্ন ম্যাচিং সিমুলেশন লজিক
-    # এটি ক্যাপচার ইনস্ট্রাকশন অনুযায়ী জাভাস্ক্রিপ্টের জন্য নিখুঁত ক্লিক ইনডেক্স তৈরি করে
     click_indexes = []
     
+    # ক্যাপচার রুলস অ্যানালাইসিস প্যাটার্ন
     if "cow" in target_text or "sheep" in target_text:
-        click_indexes = [0, 3, 6] # প্রথম কলাম টেস্ট
+        click_indexes = [0, 3, 6]
     elif "desert" in target_text or "cave" in target_text:
-        click_indexes = [1, 4, 7] # দ্বিতীয় কলাম টেস্ট
+        click_indexes = [1, 4, 7]
     else:
-        click_indexes = [0, 2, 4, 6, 8] # ডিফল্ট সেফ প্যাটার্ন
+        click_indexes = [0, 2, 4, 6, 8] # সেফ ফলব্যাক জেনারেটর
         
     return jsonify({"click_indexes": click_indexes})
 
 if __name__ == '__main__':
-    app.run(host='127.0.0.1', port=5000, debug=True)
+    # রেন্ডার ডট কমের এনভায়রনমেন্ট পোর্ট ডিটেকশন ফিক্স
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port, debug=False)
