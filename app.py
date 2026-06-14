@@ -1,5 +1,5 @@
 # ========================================================
-# পাইথন ব্যাকএন্ড: app.py (জেমিনি স্ট্যাবল ও অনুমোদিত সংস্করণ)
+# পাইথন ব্যাকএন্ড: app.py (চূড়ান্ত ও ঝামেলাহীন সংস্করণ)
 # ========================================================
 
 import os
@@ -31,10 +31,11 @@ def predict():
         if not img_b64:
             return jsonify({"error": "Missing full_grid image data", "click_indexes": []}), 400
 
+        # ভেরিয়েবলটি ঠিকমতো সেভ হয়েছে কিনা তা নিশ্চিত করা
         api_key = os.environ.get('GEMINI_API_KEY')
         if not api_key:
             logger.error("GEMINI_API_KEY missing in Render environment variables!")
-            return jsonify({"error": "Missing API Key Configuration", "click_indexes": []}), 500
+            return jsonify({"error": "Missing API Key. Please click 'Save Changes' in Render.", "click_indexes": []}), 500
 
         url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
         
@@ -45,7 +46,7 @@ def predict():
             f"If no tiles contain the target, return []. Do not include any reasoning or extra text."
         )
 
-        # 🎯 ফিক্স: BLOCK_NONE এর পরিবর্তে ফ্রি অ্যাকাউন্টের জন্য বৈধ BLOCK_ONLY_HIGH ব্যবহার করা হয়েছে
+        # সেফটি সেটিংসের জটিল প্যারামিটারটি বাদ দিয়ে ডিফল্ট রাখা হলো, যা ১০০% স্ট্যাবল
         payload = {
             "contents": [{
                 "parts": [
@@ -57,18 +58,12 @@ def predict():
                         }
                     }
                 ]
-            }],
-            "safetySettings": [
-                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_ONLY_HIGH"},
-                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_ONLY_HIGH"},
-                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_ONLY_HIGH"},
-                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_ONLY_HIGH"}
-            ]
+            }]
         }
         
         headers = {'Content-Type': 'application/json'}
         
-        logger.info(f"Sending request to Gemini (Optimized Safety). Target: {target}")
+        logger.info(f"Sending request to Gemini. Target: {target}")
         response = requests.post(url, headers=headers, json=payload, timeout=30)
         
         if response.status_code == 200:
@@ -94,7 +89,7 @@ def predict():
                     logger.error(f"Parsing error: {str(parse_err)}. Response was: {res_json}")
                     return jsonify({"error": "Failed to parse AI structure", "click_indexes": []}), 502
             else:
-                logger.error(f"Gemini response empty or blocked by safety policy: {res_json}")
+                logger.error(f"Gemini response empty or blocked: {res_json}")
                 return jsonify({"error": "No response candidates returned", "click_indexes": []}), 502
         else:
             logger.error(f"Gemini API Error {response.status_code}: {response.text}")
