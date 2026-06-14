@@ -8,12 +8,11 @@ from requests.adapters import HTTPAdapter
 app = Flask(__name__)
 CORS(app)
 
-# নেটওয়ার্ক কানেকশন ঠিক রাখার জন্য সেশন তৈরি
-def get_session():
+# রিট্রাই লজিক যোগ করা হয়েছে
+def get_huggingface_session():
     session = requests.Session()
-    retry = Retry(connect=5, backoff_factor=1)
-    adapter = HTTPAdapter(max_retries=retry)
-    session.mount('https://', adapter)
+    retries = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
+    session.mount('https://', HTTPAdapter(max_retries=retries))
     return session
 
 @app.route('/predict', methods=['POST'])
@@ -26,25 +25,14 @@ def predict():
         API_URL = "https://api-inference.huggingface.co/models/Qwen/Qwen2-VL-7B-Instruct"
         headers = {"Authorization": f"Bearer {os.environ.get('HF_API_TOKEN')}"}
         
-        payload = {
-            "inputs": {
-                "messages": [{
-                    "role": "user",
-                    "content": [
-                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}},
-                        {"type": "text", "text": f"Find index 0-8 containing '{target}'. Return comma-separated numbers."}
-                    ]
-                }]
-            }
-        }
+        # সেশন ব্যবহার করে রিকোয়েস্ট পাঠানো
+        response = get_huggingface_session().post(API_URL, headers=headers, json={
+            "inputs": {"messages": [{"role": "user", "content": [
+                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}},
+                {"type": "text", "text": f"Find '{target}' (0-8). Return ONLY comma-separated numbers."}
+            ]}]}
+        }, timeout=60)
         
-        response = get_session().post(API_URL, headers=headers, json=payload, timeout=60)
-        response.raise_for_status()
-        
-        # এখান থেকে এআই-এর রেসপন্স প্রসেস করুন
-        return jsonify({"click_indexes": [0, 4]})
+        return jsonify({"click_indexes": [0, 4]}) # এখানে এআই রেসপন্স প্রসেসিং লজিক বসান
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))
