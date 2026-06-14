@@ -31,12 +31,16 @@ def predict():
         if not img_b64:
             return jsonify({"error": "Missing full_grid image data", "click_indexes": []}), 400
 
-        # ভেরিয়েবলটি ঠিকমতো সেভ হয়েছে কিনা তা নিশ্চিত করা
-        api_key = os.environ.get('GEMINI_API_KEY')
-        if not api_key:
+        # ভেরিয়েবলটি ঠিকমতো সেভ হয়েছে কিনা তা নিশ্চিত করা এবং অদৃশ্য স্পেস কেটে ফেলা (.strip())
+        raw_api_key = os.environ.get('GEMINI_API_KEY')
+        if not raw_api_key:
             logger.error("GEMINI_API_KEY missing in Render environment variables!")
             return jsonify({"error": "Missing API Key. Please click 'Save Changes' in Render.", "click_indexes": []}), 500
 
+        # 🎯 ফিক্স: এপিআই কী-এর শুরু বা শেষের সব অদৃশ্য স্পেস ও নিউ-লাইন স্বয়ংক্রিয়ভাবে মুছে ফেলবে
+        api_key = raw_api_key.strip()
+
+        
         url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
         
         prompt_text = (
