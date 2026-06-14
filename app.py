@@ -1,5 +1,5 @@
 # ========================================================
-# পাইথন ব্যাকএন্ড: app.py (Google Gemini API সংস্করণ)
+# পাইথন ব্যাকএন্ড: app.py (গুগল জেমিনি ফিক্সড সংস্করণ)
 # ========================================================
 
 import os
@@ -32,14 +32,14 @@ def predict():
         if not img_b64:
             return jsonify({"error": "Missing full_grid image data", "click_indexes": []}), 400
 
-        # 🔑 Render-এর Environment Variable থেকে Gemini API Key নেওয়া হচ্ছে
+        # Render-এর Environment Variable থেকে Gemini API Key নেওয়া
         api_key = os.environ.get('GEMINI_API_KEY')
         if not api_key:
-            logger.error("GEMINI_API_KEY Environment Variable missing!")
+            logger.error("GEMINI_API_KEY Environment Variable missing in Render!")
             return jsonify({"error": "Missing API Key Configuration", "click_indexes": []}), 500
 
-        # 🎯 Gemini 2.5 Flash অফিশিয়াল REST এন্ডপয়েন্ট ইউআরএল
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+        # 🎯 ফিক্স ১: সঠিক মডেল নেম 'gemini-1.5-flash' ব্যবহার করা হয়েছে
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
         
         prompt_text = (
             f"This image is a 3x3 grid of tiles indexed from 0 to 8 (0=top-left, 8=bottom-right). "
@@ -48,7 +48,6 @@ def predict():
             f"If no tiles contain the target, return []. Do not include any reasoning or extra text."
         )
 
-        # Gemini-র স্ট্যান্ডার্ড লাইটওয়েট পে-লোড ফরম্যাট
         payload = {
             "contents": [{
                 "parts": [
@@ -65,32 +64,39 @@ def predict():
         
         headers = {'Content-Type': 'application/json'}
         
-        logger.info(f"Sending request to Google Gemini. Target: {target}")
+        logger.info(f"Sending request to Google Gemini (1.5-Flash). Target: {target}")
         response = requests.post(url, headers=headers, json=payload, timeout=30)
         
         if response.status_code == 200:
             res_json = response.json()
-            try:
-                # Gemini রেসপন্স থেকে টেক্সট এক্সট্র্যাক্ট করা
-                ai_response = res_json['candidates'][0]['content']['parts'][0]['text']
-                logger.info(f"Gemini Raw Response: {ai_response}")
-                
-                # স্কয়ার ব্র্যাকেটের ভেতরের সংখ্যাগুলো পার্স করা
-                bracket_match = re.search(r'\[(.*?)\]', ai_response)
-                if bracket_match:
-                    inside_content = bracket_match.group(1)
-                    found_indexes = [int(x) for x in re.findall(r'[0-8]', inside_content)]
-                else:
-                    found_indexes = [int(x) for x in re.findall(r'[0-8]', ai_response)]
+            
+            # 🎯 ফিক্স ২: KeyError এড়াতে 'candidates' কি-টি নিরাপদে চেক করা হচ্ছে
+            if 'candidates' in res_json and len(res_json['candidates']) > 0:
+                try:
+                    ai_response = res_json['candidates'][0]['content']['parts'][0]['text']
+                    logger.info(f"Gemini Raw Response: {ai_response}")
                     
-                click_indexes = sorted(list(set(found_indexes)))
-                logger.info(f"Final Filtered Click Indexes: {click_indexes}")
-                return jsonify({"click_indexes": click_indexes})
-                
-            except (KeyError, IndexError) as parse_err:
-                logger.error(f"Failed to parse Gemini response structure: {res_json}")
-                return jsonify({"error": "Invalid response structure from AI", "click_indexes": []}), 502
+                    # স্কয়ার ব্র্যাকেটের ভেতরের সংখ্যাগুলো পার্স করা
+                    bracket_match = re.search(r'\[(.*?)\]', ai_response)
+                    if bracket_match:
+                        inside_content = bracket_match.group(1)
+                        found_indexes = [int(x) for x in re.findall(r'[0-8]', inside_content)]
+                    else:
+                        found_indexes = [int(x) for x in re.findall(r'[0-8]', ai_response)]
+                        
+                    click_indexes = sorted(list(set(found_indexes)))
+                    logger.info(f"Final Filtered Click Indexes: {click_indexes}")
+                    return jsonify({"click_indexes": click_indexes})
+                    
+                except Exception as parse_err:
+                    logger.error(f"Parsing error: {str(parse_err)}. Response was: {res_json}")
+                    return jsonify({"error": "Failed to parse AI structure", "click_indexes": []}), 502
+            else:
+                # যদি জেমিনি কোনো ইন্টারনাল এরর মেসেজ দেয়, তা লগে প্রিন্ট হবে
+                logger.error(f"Gemini returned 200 but contains error/block: {res_json}")
+                return jsonify({"error": "No response candidates returned", "details": res_json, "click_indexes": []}), 502
         else:
+            # এপিআই কী ভুল হলে বা অন্য কোনো সমস্যা হলে এখানে আসল এররটি দেখা যাবে
             logger.error(f"Gemini API Error {response.status_code}: {response.text}")
             return jsonify({
                 "error": f"Gemini API Code {response.status_code}",
