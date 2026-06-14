@@ -1,5 +1,5 @@
 # ========================================================
-# পাইথন ব্যাকএন্ড: app.py (সম্পূর্ণ ফাইল)
+# পাইথন ব্যাকএন্ড: app.py (সম্পূর্ণ এবং সংশোধিত কোড)
 # ========================================================
 
 import os
@@ -18,13 +18,13 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 CORS(app)
 
-# DNS ড্রপ বা কানেকশন ফেইলুর হ্যান্ডেল করার জন্য অত্যন্ত শক্তিশালী সেশন ম্যানেজার
+# নেটওয়ার্ক ড্রপ বা সাময়িক ডোমেন এরর সামলানোর জন্য রিট্রাই মেকানিজম
 def create_robust_session():
     session = requests.Session()
     retries = Retry(
         total=5,
-        connect=5,  # DNS রেজোলিউশন বা কানেকশন এরর হলে ৫ বার রিট্রাই করবে
-        read=5,     # ডেটা পড়তে দেরি হলে ৫ বার রিট্রাই করবে
+        connect=5,  # কানেকশন বা DNS রেজোলিউশন এরর হলে ৫ বার রিট্রাই করবে
+        read=5,     # ডেটা রেসপন্স পেতে দেরি হলে ৫ বার রিট্রাই করবে
         backoff_factor=1,
         status_forcelist=[500, 502, 503, 504],
         raise_on_status=False
@@ -61,6 +61,7 @@ def predict():
             
         headers = {"Authorization": f"Bearer {token}"}
         
+        # 🎯 মূল পরিবর্তন: "options": {"wait_for_model": True} যুক্ত করা হয়েছে
         payload = {
             "inputs": {
                 "messages": [{
@@ -70,13 +71,16 @@ def predict():
                         {"type": "text", "text": f"This is a 3x3 image grid indexed from 0 to 8. Find all individual tile indexes that contain '{target}'. Return ONLY the numbers separated by commas (e.g., 1,4,7). If nothing matches, return empty."}
                     ]
                 }]
+            },
+            "options": {
+                "wait_for_model": True  # মডেল লোড হওয়া পর্যন্ত Hugging Face-কে জোরপূর্বক অপেক্ষা করাবে
             }
         }
         
         logger.info(f"Sending request to HuggingFace. Target: {target}")
         
-        # ৩০ সেকেন্ড টাইমআউট সহ রিকোয়েস্ট পাঠানো
-        response = http_session.post(API_URL, headers=headers, json=payload, timeout=30)
+        # মডেল লোড হওয়ার সুবিধার্থে টাইমআউট বাড়িয়ে ৬০ সেকেন্ড করা হলো
+        response = http_session.post(API_URL, headers=headers, json=payload, timeout=60)
         
         if response.status_code == 200:
             ai_response = str(response.json())
@@ -91,6 +95,7 @@ def predict():
             logger.error(f"HuggingFace API Returned Code {response.status_code}: {response.text}")
             return jsonify({
                 "error": f"HuggingFace API Code {response.status_code}",
+                "details": response.text,
                 "click_indexes": []
             }), 502
             
