@@ -18,11 +18,13 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 CORS(app)
 
-# নেটওয়ার্ক সমস্যা বা DNS ড্রপ হলে অটোমেটিক ৫ বার রিট্রাই করার সেশন ম্যানেজার
+# DNS ড্রপ বা কানেকশন ফেইলুর হ্যান্ডেল করার জন্য অত্যন্ত শক্তিশালী সেশন ম্যানেজার
 def create_robust_session():
     session = requests.Session()
     retries = Retry(
         total=5,
+        connect=5,  # DNS রেজোলিউশন বা কানেকশন এরর হলে ৫ বার রিট্রাই করবে
+        read=5,     # ডেটা পড়তে দেরি হলে ৫ বার রিট্রাই করবে
         backoff_factor=1,
         status_forcelist=[500, 502, 503, 504],
         raise_on_status=False
@@ -44,7 +46,6 @@ def predict():
         img_b64 = data.get('full_grid')
         target = data.get('target', 'object')
         
-        # টেক্সটের আশেপাশের অতিরিক্ত স্পেস ক্লিন করা
         if isinstance(target, str):
             target = target.strip()
         
@@ -81,7 +82,7 @@ def predict():
             ai_response = str(response.json())
             logger.info(f"AI Raw Response: {ai_response}")
             
-            # রেসপন্স থেকে শুধুমাত্র ০ থেকে ৮ এর ভেতরের সংখ্যাগুলো খুঁজে বের করা
+            # রেসপন্স থেকে ০ থেকে ৮ এর ভেতরের সংখ্যাগুলো ফিল্টার করা
             found_indexes = [int(x) for x in re.findall(r'[0-8]', ai_response)]
             click_indexes = sorted(list(set(found_indexes))) 
             
@@ -89,21 +90,13 @@ def predict():
         else:
             logger.error(f"HuggingFace API Returned Code {response.status_code}: {response.text}")
             return jsonify({
-                "error": f"HuggingFace Node Code {response.status_code}",
+                "error": f"HuggingFace API Code {response.status_code}",
                 "click_indexes": []
             }), 502
             
-    except requests.exceptions.ConnectionError as ce:
-        logger.error(f"Render Server Network/DNS Failure: {str(ce)}")
-        return jsonify({
-            "error": "Render Server Temporary DNS Failure. Auto-retry exhausted.",
-            "click_indexes": []
-        }), 503
-        
     except Exception as e:
         logger.error(f"Unexpected internal server error: {str(e)}")
         return jsonify({"error": str(e), "click_indexes": []}), 500
 
 if __name__ == '__main__':
-    # রেন্ডার পোর্টের সাথে ম্যাচ রেখে রান করা
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
