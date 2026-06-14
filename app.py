@@ -1,5 +1,5 @@
 # ========================================================
-# পাইথন ব্যাকএন্ড: app.py (জেমিনি ফুল আনলকড সংস্করণ)
+# পাইথন ব্যাকএন্ড: app.py (জেমিনি স্ট্যাবল ও অনুমোদিত সংস্করণ)
 # ========================================================
 
 import os
@@ -45,7 +45,7 @@ def predict():
             f"If no tiles contain the target, return []. Do not include any reasoning or extra text."
         )
 
-        # 🎯 মূল পরিবর্তন: সেফটি সেটিংস সম্পূর্ণ আনলক করা হয়েছে (BLOCK_NONE)
+        # 🎯 ফিক্স: BLOCK_NONE এর পরিবর্তে ফ্রি অ্যাকাউন্টের জন্য বৈধ BLOCK_ONLY_HIGH ব্যবহার করা হয়েছে
         payload = {
             "contents": [{
                 "parts": [
@@ -59,16 +59,16 @@ def predict():
                 ]
             }],
             "safetySettings": [
-                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
+                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_ONLY_HIGH"},
+                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_ONLY_HIGH"},
+                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_ONLY_HIGH"},
+                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_ONLY_HIGH"}
             ]
         }
         
         headers = {'Content-Type': 'application/json'}
         
-        logger.info(f"Sending request to Gemini (Fully Unlocked). Target: {target}")
+        logger.info(f"Sending request to Gemini (Optimized Safety). Target: {target}")
         response = requests.post(url, headers=headers, json=payload, timeout=30)
         
         if response.status_code == 200:
@@ -76,7 +76,6 @@ def predict():
             
             if 'candidates' in res_json and len(res_json['candidates']) > 0:
                 try:
-                    # জেমিনির রেসপন্স পার্স করা
                     ai_response = res_json['candidates'][0]['content']['parts'][0]['text']
                     logger.info(f"Gemini Raw Response: {ai_response}")
                     
@@ -95,7 +94,7 @@ def predict():
                     logger.error(f"Parsing error: {str(parse_err)}. Response was: {res_json}")
                     return jsonify({"error": "Failed to parse AI structure", "click_indexes": []}), 502
             else:
-                logger.error(f"Gemini response empty or blocked: {res_json}")
+                logger.error(f"Gemini response empty or blocked by safety policy: {res_json}")
                 return jsonify({"error": "No response candidates returned", "click_indexes": []}), 502
         else:
             logger.error(f"Gemini API Error {response.status_code}: {response.text}")
