@@ -11,20 +11,18 @@ from flask_cors import CORS
 from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
 
-# লগিং সিস্টেম কনফিগার করা
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 CORS(app)
 
-# নেটওয়ার্ক ড্রপ বা সাময়িক ডোমেন এরর সামলানোর জন্য রিট্রাই মেকানিজম
 def create_robust_session():
     session = requests.Session()
     retries = Retry(
         total=5,
-        connect=5,  # কানেকশন বা DNS রেজোলিউশন এরর হলে ৫ বার রিট্রাই করবে
-        read=5,     # ডেটা রেসপন্স পেতে দেরি হলে ৫ বার রিট্রাই করবে
+        connect=5,
+        read=5,
         backoff_factor=1,
         status_forcelist=[500, 502, 503, 504],
         raise_on_status=False
@@ -56,51 +54,49 @@ def predict():
         
         token = os.environ.get('HF_API_TOKEN')
         if not token:
-            logger.error("HF_API_TOKEN Environment Variable missing!")
-            return jsonify({"error": "Missing API Token Configuration", "click_indexes": []}), 500
+            logger.error("HF_API_TOKEN missing!")
+            return jsonify({"error": "Missing API Token", "click_indexes": []}), 500
             
         headers = {"Authorization": f"Bearer {token}"}
         
-        # 🎯 মূল পরিবর্তন: "options": {"wait_for_model": True} যুক্ত করা হয়েছে
+        # 🎯 প্রম্পট পরিবর্তন: এআই-কে শুধু ব্র্যাকেটের ভেতর উত্তর দিতে বাধ্য করা হয়েছে
         payload = {
             "inputs": {
                 "messages": [{
                     "role": "user",
                     "content": [
                         {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}},
-                        {"type": "text", "text": f"This is a 3x3 image grid indexed from 0 to 8. Find all individual tile indexes that contain '{target}'. Return ONLY the numbers separated by commas (e.g., 1,4,7). If nothing matches, return empty."}
+                        {"type": "text", "text": f"This is a 3x3 image grid indexed from 0 to 8. Identify all individual tile indexes that contain '{target}'. Your response must ONLY contain the index numbers inside square brackets, for example: [1, 4, 7]. If no tiles match, return []. Do not write any other explanation or list numbering."}
                     ]
                 }]
             },
-            "options": {
-                "wait_for_model": True  # মডেল লোড হওয়া পর্যন্ত Hugging Face-কে জোরপূর্বক অপেক্ষা করাবে
-            }
+            "options": {"wait_for_model": True}
         }
         
         logger.info(f"Sending request to HuggingFace. Target: {target}")
-        
-        # মডেল লোড হওয়ার সুবিধার্থে টাইমআউট বাড়িয়ে ৬০ সেকেন্ড করা হলো
         response = http_session.post(API_URL, headers=headers, json=payload, timeout=60)
         
         if response.status_code == 200:
             ai_response = str(response.json())
             logger.info(f"AI Raw Response: {ai_response}")
             
-            # রেসপন্স থেকে ০ থেকে ৮ এর ভেতরের সংখ্যাগুলো ফিল্টার করা
-            found_indexes = [int(x) for x in re.findall(r'[0-8]', ai_response)]
-            click_indexes = sorted(list(set(found_indexes))) 
-            
+            # 🎯 রেগুলার এক্সপ্রেশন ফিক্স: প্রথমে স্কয়ার ব্র্যাকেট [...] খুঁজে তার ভেতরের সংখ্যা বের করা
+            bracket_match = re.search(r'\[(.*?)\]', ai_response)
+            if bracket_match:
+                inside_content = bracket_match.group(1)
+                found_indexes = [int(x) for x in re.findall(r'[0-8]', inside_content)]
+                click_indexes = sorted(list(set(found_indexes)))
+            else:
+                click_indexes = []
+                
+            logger.info(f"Filtered Click Indexes: {click_indexes}")
             return jsonify({"click_indexes": click_indexes})
         else:
-            logger.error(f"HuggingFace API Returned Code {response.status_code}: {response.text}")
-            return jsonify({
-                "error": f"HuggingFace API Code {response.status_code}",
-                "details": response.text,
-                "click_indexes": []
-            }), 502
+            logger.error(f"HuggingFace API Error {response.status_code}: {response.text}")
+            return jsonify({"error": f"HuggingFace Error {response.status_code}", "click_indexes": []}), 502
             
     except Exception as e:
-        logger.error(f"Unexpected internal server error: {str(e)}")
+        logger.error(f"Internal error: {str(e)}")
         return jsonify({"error": str(e), "click_indexes": []}), 500
 
 if __name__ == '__main__':
